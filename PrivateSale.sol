@@ -4,194 +4,237 @@ pragma solidity ^0.8.17;
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract PrivateSale {
-    using SafeERC20 for IERC20;
+  using SafeERC20 for IERC20;
 
-    address private owner;
-    mapping(address => bool) private whitelist;
-    mapping(address => bool) private participants;
-    mapping(address => mapping (uint8 => SaleDeposit)) userDeposit;
-    Sale[] sales;
-    mapping(string => uint8) saleId;
+  enum SaleState {INITIALIZED, ACTIVE, CANCELED, FINALIZED}
 
-
-    uint8 depositAmountThresh = 50;
-    uint8 depositTimeThresh = 3;
-    uint256 decimals = 10**18;
-
-    struct SaleDeposit {
-        string name;
-        uint256 deposit;
-    }
+  struct SaleDeposit {
+    string name;
+    uint256 deposit;
+  }
 
   struct Sale{
     string name;
     uint256 currentSupply;
     uint256 maxSupply;
-    uint256 startTime;
-    uint256 endTime;
     uint256 softGoal;
     uint256 minPerBuy;
     uint256 maxPerBuy;
     uint256 currentWei;
-    //Current state of the sale {0: Initialized, 1: Active, 2: Canceled, 3: Finalized}.
-    uint8 saleState;
-    uint8 totalBought;
+    uint136 startTime;
+    uint136 endTime;
+    uint8 totalTimeBought;
     uint8 joinPercent;
     uint8 vipPercent;
+    //Current state of the sale {0: Initialized, 1: Active, 2: Canceled, 3: Finalized}.
+    SaleState saleState;
     IERC20 token;
+  }
+
+  address private owner;
+
+  mapping(address => bool) private whitelist;
+
+  mapping(address => bool) private participants;
+
+  mapping(address => mapping (uint8 => SaleDeposit)) private userDeposit;
+
+  mapping(string => uint8) private saleId;
+
+  Sale[] private sales;
+
+  uint8 private depositAmountThresh = 50;
+  uint8 private depositTimeThresh = 3;
+  uint256 private decimals = 18;
+
+  event CreateSale (Sale sale);
+
+  event Buy(string name, uint256 amount, uint256 currentSupply);
+
+  event ClaimTokenFromFinalizedSale(string name, uint256 amount);
+
+  event ReclaimWeiFromCanceledSale(string name, uint256 amount);
+
+  error NotOwner();
+
+  error AlreadyParticipant();
+
+  error NotParticipant();
+
+  error VipConditionUnsastified();
+
+  error InputInvalid();
+
+  error SaleNotExist();
+
+  error SaleNotInitialized();
+
+  error SaleNotActive();
+
+  error SaleNotCanceled();
+
+  error SaleNotFinalized();
+
+  error SaleNotOver();
+
+  error SaleIsOver();
+
+  error InsufficientSupplyInSale();
+
+  modifier onlyOwner() {
+    if(msg.sender != owner) revert NotOwner();
+    _;
+  }
+
+  modifier isParticipant() {
+    if(participants[msg.sender] != true) revert NotParticipant(); 
+     _;
   }
 
   constructor() {
     owner = msg.sender;
   }
 
-  modifier onlyOwner() {
-    require(msg.sender == owner,"you no boss");
-    _;
+  function register(address user) public onlyOwner {
+    if(participants[user] = true) revert AlreadyParticipant(); 
+    participants[user] = true;
   }
 
-  modifier depositCondition(uint8 id) {
-        require(sales[id].saleState == 1, "Sale is not Active");
-        require(msg.value >= sales[id].minPerBuy && msg.value <= sales[id].maxPerBuy , "Amount invalid");
-        require(participants[msg.sender] == true, "Not paticipant");
-        require(sales[id].maxSupply - sales[id].currentWei * sales[id].vipPercent + msg.value >= 0, "insufficient supply");
-        require(block.timestamp < sales[id].endTime, "Sale is over");
-        _;
+  function registerVip(address user) public onlyOwner {
+    if(participants[user] = true) revert NotParticipant();
+    if(totalDeposit(user) < depositAmountThresh || totalTime(user) < depositTimeThresh) {
+      revert VipConditionUnsastified();
+    }
+    whitelist[user] = true;
   }
 
-  event CreateSale (string _name, uint256 _maxSupply,  uint256 _minPerBuy, uint256 _maxPerBuy, address _token, uint256 _softgoal, uint8 _joinPercent, uint8 _vipPercent);
-    event Buy(string name, uint256 amount, uint256 currentSupply);
-    event Claim(string name, uint256 amount);
+  function changeVipCondition(uint8 _depositAmountThresh, uint8 _depositTimeThresh) public onlyOwner {
+    if(_depositAmountThresh < 0 || _depositTimeThresh < 0) {
+      revert InputInvalid();
+    }
+    depositAmountThresh = _depositAmountThresh;
+    depositTimeThresh = _depositTimeThresh;
+  }
 
-    function createSale(string memory _name, uint256 _maxSupply, uint256 _minPerBuy, uint256 _maxPerBuy, address _token, uint256 _softgoal, uint8 _joinPercent, uint8 _vipPercent) public onlyOwner {
-        Sale memory sale;
-        sale.name = _name;
-        sale.maxSupply = _maxSupply;
-        sale.minPerBuy = _minPerBuy;
-        sale.maxPerBuy = _maxPerBuy;
-        sale.token = IERC20(_token);
-        sale.softGoal = _softgoal;
-        sale.joinPercent = _joinPercent;
-        sale.vipPercent = _vipPercent;
-        sale.currentSupply = _maxSupply;
+  function createSale(Sale memory sale) public onlyOwner {
+    sales.push(sale);
+    saleId[sale.name] = uint8(sales.length-1);
 
-        sales.push(sale);
-        saleId[_name] = uint8(sales.length-1);
+    emit CreateSale(sale);
+  }
 
-        emit CreateSale(_name, _maxSupply,  _minPerBuy, _maxPerBuy, _token, _softgoal, _joinPercent, _vipPercent);
+  function startSale(string memory name, uint256 duration) public onlyOwner {
+    Sale storage sale = sales[saleId[name]];
+    if(sale.maxSupply == 0) revert SaleNotExist();
+    if(sale.saleState != SaleState.INITIALIZED) revert SaleNotInitialized();
+
+    sale.startTime = uint136(block.timestamp);
+    sale.endTime = uint136(sale.startTime + duration);
+
+    sale.saleState = SaleState.ACTIVE;
+  }
+
+  function endSale(string memory name) public onlyOwner {
+    Sale storage sale = sales[saleId[name]];
+    if(sale.saleState != SaleState.ACTIVE) revert SaleNotActive();
+    if(block.timestamp <= sale.endTime) revert SaleNotOver();
+
+    if(sale.softGoal > sale.currentWei) {
+      sale.saleState = SaleState.CANCELED;
+    } 
+    if(sale.softGoal <= sale.currentWei) {
+      sale.saleState = SaleState.FINALIZED;
+    }
+  }
+
+  function totalDeposit(address user) private view returns (uint256) {
+    uint256 total = 0;
+    for (uint8 i = 0; i < sales.length; i++) {
+        total += userDeposit[user][i].deposit;
+    }  
+    return total;
+  }
+
+  function totalTime(address user) private view returns (uint256) {
+    uint256 total = 0;
+    for (uint8 i = 0; i < sales.length; i++) {
+        if(userDeposit[user][i].deposit != 0) total++;
+    }  
+    return total;
+  }
+
+  function buy(string memory name) external payable isParticipant {
+    uint8 id = saleId[name];
+    Sale storage sale = sales[saleId[name]];
+
+    if(sale.saleState != SaleState.ACTIVE) revert SaleNotActive();
+    if(block.timestamp > sale.endTime) {
+      revert SaleIsOver();
+    }
+    if(msg.value < sale.minPerBuy || msg.value > sale.maxPerBuy) {
+      revert InputInvalid();
+    }
+    if(sale.maxSupply - sale.currentWei * sale.vipPercent - msg.value < 0) {
+      revert InsufficientSupplyInSale();
     }
 
-    function register(address user) public onlyOwner {
-        participants[user] = true;
+    userDeposit[msg.sender][id].deposit += msg.value;
+    sale.currentWei += msg.value;
+    sale.totalTimeBought++;
+
+    if (whitelist[msg.sender]) {
+      sale.currentSupply -= userDeposit[msg.sender][id].deposit * sale.vipPercent;
+    } else {
+      sale.currentSupply -= userDeposit[msg.sender][id].deposit * sale.joinPercent;
     }
 
-    function registerVip(address user) public onlyOwner {
-        require(totalDeposit(user) >= depositAmountThresh && totalTime(user) >= depositTimeThresh, "Vip condition invalid");
-        whitelist[user] = true;
+    emit Buy(name, msg.value, sale.currentSupply);
+  }
+
+  function claim(string memory name) external isParticipant {
+    Sale memory sale = sales[saleId[name]];
+    if(sale.saleState != SaleState.CANCELED && sale.saleState != SaleState.FINALIZED) {
+      revert SaleNotOver();
     }
 
-    function totalDeposit(address user) private view returns (uint256) {
-        uint256 total = 0;
-        for (uint8 i = 0; i < sales.length; i++) {
-            total += userDeposit[user][i].deposit;
-        }  
-
-        return total;
+    uint256 amount = 0;
+    if(sale.saleState == SaleState.CANCELED) {
+      amount = userDeposit[msg.sender][saleId[name]].deposit;
+      payable (msg.sender).transfer(amount);
+      emit ReclaimWeiFromCanceledSale(name, amount);
+    } 
+    if(sale.saleState == SaleState.FINALIZED) {
+      if (whitelist[msg.sender]) {
+          amount = userDeposit[msg.sender][saleId[name]].deposit * sale.vipPercent;
+      } else {
+          amount = userDeposit[msg.sender][saleId[name]].deposit * sale.joinPercent;
+      } 
+      sale.token.safeTransferFrom(owner, msg.sender, amount);
+      emit ClaimTokenFromFinalizedSale(name, amount);
     }
+  }
 
-    function totalTime(address user) private view returns (uint256) {
-        uint256 total = 0;
-        for (uint8 i = 0; i < sales.length; i++) {
-            if(userDeposit[user][i].deposit != 0) total++;
-        }  
-
-        return total;
+  function withdraw(string memory name) public onlyOwner {
+    Sale memory sale = sales[saleId[name]];
+    if(sale.saleState != SaleState.FINALIZED) {
+      revert SaleNotFinalized();
     }
+    payable (owner).transfer(sale.currentWei);
+  }
 
+  function getCurrentSuppy(string memory name) public view returns(uint256) {
+      uint8 id = saleId[name];
+      return sales[id].currentSupply;
+  }
 
+  function getCurrentWei(string memory name) public view returns(uint256) {
+      uint8 id = saleId[name];
+      return sales[id].currentWei;
+  }
 
-    function changeVipCondition(uint8 _depositAmountThresh, uint8 _depositTimeThresh) public onlyOwner {
-        require(_depositAmountThresh > 0 && _depositTimeThresh > 0, "Thresh invalid");
-        depositAmountThresh = _depositAmountThresh;
-        depositTimeThresh = _depositTimeThresh;
-    }
-
-    function startSale(string memory name, uint256 duration) public onlyOwner {
-        Sale storage sale = sales[saleId[name]];
-        require(sale.maxSupply != 0, "Sale not exist");
-        require(sale.saleState == 0, "Sale state is not Initialized");
-
-        sale.startTime = block.timestamp;
-        sale.endTime = sale.startTime + duration;
-
-        sale.saleState = 1;
-    }
-
-    function buy(string memory name) external payable depositCondition(saleId[name]){
-        uint8 id = saleId[name];
-
-        userDeposit[msg.sender][id].deposit += msg.value;
-        sales[id].currentWei += msg.value;
-        sales[id].totalBought++;
-
-        if (whitelist[msg.sender]) {
-            sales[id].currentSupply -= userDeposit[msg.sender][saleId[name]].deposit * sales[id].vipPercent;
-        } else {
-            sales[id].currentSupply -= userDeposit[msg.sender][saleId[name]].deposit * sales[id].joinPercent;
-        }
-
-        emit Buy(name, msg.value, sales[id].currentSupply);
-    }
-
-    function endSale(string memory name) public onlyOwner {
-        Sale storage sale = sales[saleId[name]];
-        require(sale.saleState == 1, "Sale is not Active");
-        require(block.timestamp > sale.endTime, "Sale not over yet");
-
-        if(sale.softGoal > sale.currentWei) {
-            sale.saleState = 2;
-        } else sale.saleState = 3;
-    }
-
-    function claim(string memory name) external {
-        require(participants[msg.sender] == true, "Not paticipant");
-        Sale storage sale = sales[saleId[name]];
-        require(sale.saleState == 2 || sale.saleState == 3, "Sale is not finish");
-        uint256 amount = 0;
-
-        if(sale.saleState == 2) {
-            payable (msg.sender).transfer(userDeposit[msg.sender][saleId[name]].deposit);
-        } else {
-            if (whitelist[msg.sender]) {
-                amount = userDeposit[msg.sender][saleId[name]].deposit * sale.vipPercent;
-            } else {
-                amount = userDeposit[msg.sender][saleId[name]].deposit * sale.joinPercent;
-            } 
-            sale.token.safeTransferFrom(owner, msg.sender, amount);
-        }
-
-        emit Claim(name, amount);
-    }
-
-    function withdraw(string memory name) public onlyOwner {
-        Sale memory sale = sales[saleId[name]];
-        require(sale.saleState == 3, "Sale is not final");
-        payable (owner).transfer(sale.currentWei);
-    }
-
-    function getCurrentSuppy(string memory name) public view returns(uint256) {
-        uint8 id = saleId[name];
-        return sales[id].currentSupply;
-    }
-
-    function getCurrentWei(string memory name) public view returns(uint256) {
-        uint8 id = saleId[name];
-        return sales[id].currentWei;
-    }
-
-    function getTotalBought(string memory name) public view returns(uint256) {
-        uint8 id = saleId[name];
-        return sales[id].totalBought;
-    }
+  function gettotalTimeBought(string memory name) public view returns(uint256) {
+      uint8 id = saleId[name];
+      return sales[id].totalTimeBought;
+  }
 
 }
