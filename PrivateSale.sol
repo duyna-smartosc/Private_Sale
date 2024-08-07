@@ -88,7 +88,7 @@ contract PrivateSale {
 
   modifier isParticipant() {
     if(participants[msg.sender] != true) revert NotParticipant(); 
-     _;
+    _;
   }
 
   constructor() {
@@ -127,10 +127,10 @@ contract PrivateSale {
     Sale storage sale = sales[saleId[name]];
     if(sale.maxSupply == 0) revert SaleNotExist();
     if(sale.saleState != SaleState.INITIALIZED) revert SaleNotInitialized();
-
+    
     sale.startTime = uint136(block.timestamp);
     sale.endTime = uint136(sale.startTime + duration);
-
+    
     sale.saleState = SaleState.ACTIVE;
   }
 
@@ -149,17 +149,23 @@ contract PrivateSale {
 
   function totalDeposit(address user) private view returns (uint256) {
     uint256 total = 0;
-    for (uint8 i = 0; i < sales.length; i++) {
+    unchecked {
+      for (uint8 i = 0; i < sales.length;) {
         total += userDeposit[user][i].deposit;
-    }  
+        ++i;
+      }  
+    }
     return total;
   }
 
   function totalTime(address user) private view returns (uint256) {
     uint256 total = 0;
-    for (uint8 i = 0; i < sales.length; i++) {
+    unchecked {
+      for (uint8 i = 0; i < sales.length;) {
         if(userDeposit[user][i].deposit != 0) total++;
-    }  
+        ++i;
+      }
+    }
     return total;
   }
 
