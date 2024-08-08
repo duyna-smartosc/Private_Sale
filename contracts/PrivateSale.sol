@@ -70,12 +70,12 @@ contract PrivateSale is IError, ICommon{
   }
 
   function register(address user) public onlyOwner {
-    if(participants[user] = true) revert AlreadyParticipant(); 
+    if(participants[user] == true) revert AlreadyParticipant(); 
     participants[user] = true;
   }
 
   function registerVip(address user) public onlyOwner {
-    if(participants[user] = true) revert NotParticipant();
+    if(participants[user] != true) revert NotParticipant();
     if(totalDeposit(user) < depositAmountThresh || totalTime(user) < depositTimeThresh) {
       revert VipConditionUnsastified();
     }
