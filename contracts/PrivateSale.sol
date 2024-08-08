@@ -2,11 +2,11 @@
 pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "./interface/errorInterface.sol";
+import "./utils/commonInterface.sol";
 
 contract PrivateSale {
   using SafeERC20 for IERC20;
-
-  enum SaleState {INITIALIZED, ACTIVE, CANCELED, FINALIZED}
 
   struct SaleDeposit {
     string name;
@@ -54,32 +54,6 @@ contract PrivateSale {
   event ClaimTokenFromFinalizedSale(string name, uint256 amount);
 
   event ReclaimWeiFromCanceledSale(string name, uint256 amount);
-
-  error NotOwner();
-
-  error AlreadyParticipant();
-
-  error NotParticipant();
-
-  error VipConditionUnsastified();
-
-  error InputInvalid();
-
-  error SaleNotExist();
-
-  error SaleNotInitialized();
-
-  error SaleNotActive();
-
-  error SaleNotCanceled();
-
-  error SaleNotFinalized();
-
-  error SaleNotOver();
-
-  error SaleIsOver();
-
-  error InsufficientSupplyInSale();
 
   modifier onlyOwner() {
     if(msg.sender != owner) revert NotOwner();
