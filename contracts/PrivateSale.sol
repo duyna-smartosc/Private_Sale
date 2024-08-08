@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./interface/errorInterface.sol";
 import "./utils/commonInterface.sol";
 
-contract PrivateSale {
+contract PrivateSale is IError, ICommon{
   using SafeERC20 for IERC20;
 
   struct SaleDeposit {
@@ -13,7 +13,7 @@ contract PrivateSale {
     uint256 deposit;
   }
 
-  struct Sale{
+  struct Sale {
     string name;
     uint256 currentSupply;
     uint256 maxSupply;
@@ -217,4 +217,44 @@ contract PrivateSale {
       return sales[id].totalTimeBought;
   }
 
+  // get private variable for testing, onlyOwner
+  // mapping(address => bool) private whitelist;
+
+  // mapping(address => bool) private participants;
+
+  // mapping(address => mapping (uint8 => SaleDeposit)) private userDeposit;
+
+  // mapping(string => uint8) private saleId;
+
+  // Sale[] private sales;
+
+  // uint8 private depositAmountThresh = 50;
+  // uint8 private depositTimeThresh = 3;
+  function checkWhiteList(address user) public view onlyOwner returns(bool) {
+    return whitelist[user];
+  }
+
+  function checkParticipants(address user) public view onlyOwner returns(bool) {
+    return participants[user];
+  }
+
+  function checkUserDeposit(address user, uint8 id) public view onlyOwner returns(SaleDeposit memory) {
+    return userDeposit[user][id];
+  }
+
+  function checksaleId(string memory name) public view onlyOwner returns(uint8) {
+    return saleId[name];
+  }
+
+  function getSale(uint8 id) public view onlyOwner returns(Sale memory) {
+    return sales[id];
+  }
+
+  function getDepositAmountThresh() public view onlyOwner returns (uint8) {
+    return depositAmountThresh;
+  }
+
+  function getDepositTimeThresh() public view onlyOwner returns (uint8) {
+    return depositTimeThresh;
+  }
 }
