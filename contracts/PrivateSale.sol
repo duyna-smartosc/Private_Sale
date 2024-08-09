@@ -107,6 +107,7 @@ contract PrivateSale is IError, ICommon{
     Sale storage sale = sales[saleId[name]];
     if(sale.maxSupply == 0) revert SaleNotExist();
     if(sale.saleState != SaleState.INITIALIZED) revert SaleNotInitialized();
+    if(duration <= 0) revert InputInvalid();
     
     sale.startTime = uint136(block.timestamp);
     sale.endTime = uint136(sale.startTime + duration);
