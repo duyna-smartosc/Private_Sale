@@ -79,6 +79,9 @@ contract PrivateSale is IError, ICommon{
     if(totalDeposit(user) < depositAmountThresh || totalTime(user) < depositTimeThresh) {
       revert VipConditionUnsastified();
     }
+    if(whitelist[user] == true) {
+      revert AlreadyVip();
+    }
     whitelist[user] = true;
   }
 
@@ -90,9 +93,12 @@ contract PrivateSale is IError, ICommon{
     depositTimeThresh = _depositTimeThresh;
   }
 
-  function createSale(Sale memory sale) public onlyOwner {
-    sales.push(sale);
-    saleId[sale.name] = uint8(sales.length-1);
+  function createSale(Sale memory _sale, address token) public onlyOwner {
+    sales.push(_sale);
+    saleId[_sale.name] = uint8(sales.length-1);
+    Sale storage sale = sales[sales.length-1];
+    sale.currentSupply = sale.maxSupply;
+    sale.token = IERC20(token);
 
     emit CreateSale(sale);
   }
@@ -157,17 +163,18 @@ contract PrivateSale is IError, ICommon{
     if(sale.maxSupply - sale.currentWei * sale.vipPercent - msg.value < 0) {
       revert InsufficientSupplyInSale();
     }
+    unchecked {
+      userDeposit[msg.sender][id].deposit += msg.value;
+      sale.currentWei += msg.value;
+      sale.totalTimeBought++;
 
-    userDeposit[msg.sender][id].deposit += msg.value;
-    sale.currentWei += msg.value;
-    sale.totalTimeBought++;
-
-    if (whitelist[msg.sender]) {
-      sale.currentSupply -= userDeposit[msg.sender][id].deposit * sale.vipPercent;
-    } else {
-      sale.currentSupply -= userDeposit[msg.sender][id].deposit * sale.joinPercent;
+      if (whitelist[msg.sender]) {
+        sale.currentSupply -= userDeposit[msg.sender][id].deposit * sale.vipPercent;
+      } else {
+        sale.currentSupply -= userDeposit[msg.sender][id].deposit * sale.joinPercent;
+      }
     }
-
+    
     emit Buy(name, msg.value, sale.currentSupply);
   }
 

@@ -6,6 +6,8 @@ interface IError {
 
   error AlreadyParticipant();
 
+  error AlreadyVip();
+
   error NotParticipant();
 
   error VipConditionUnsastified();
