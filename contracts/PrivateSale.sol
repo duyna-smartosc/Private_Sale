@@ -340,7 +340,7 @@ contract PrivateSale is IError, ICommon{
    */
   function getCurrentSuppy(bytes memory name) public view returns(uint256) {
       uint8 id = saleId[name];
-      return sales[id].saleProperties.currentSupply;
+      return sales[id].saleProperties[0];
   }
 
   /** 
@@ -350,7 +350,7 @@ contract PrivateSale is IError, ICommon{
    */
   function getCurrentWei(bytes memory name) public view returns(uint256) {
       uint8 id = saleId[name];
-      return sales[id].saleProperties.currentWei;
+      return sales[id].saleProperties[5];
   }
 
   /** 
@@ -360,7 +360,7 @@ contract PrivateSale is IError, ICommon{
    */
   function gettotalTimeBought(bytes memory name) public view returns(uint256) {
       uint8 id = saleId[name];
-      return sales[id].saleFinances.totalTimeBought;
+      return sales[id].saleFinances[0];
   }
 
   /** 
