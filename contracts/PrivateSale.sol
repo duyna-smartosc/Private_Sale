@@ -8,59 +8,88 @@ import "./utils/commonInterface.sol";
 contract PrivateSale is IError, ICommon{
   using SafeERC20 for IERC20;
 
-  //store the deposit amount in sale with name for each user
+  // store the deposit amount in sale with name for each user
   struct SaleDeposit {
     string name;
     uint256 deposit;
   }
 
-  //store all the info of a sale
+  // Store all the info of a sale
   struct Sale {
-    string name;
-    uint256 currentSupply;
-    uint256 maxSupply;
-    uint256 softGoal;
-    uint256 minPerBuy;
-    uint256 maxPerBuy;
-    uint256 currentWei;
-    uint136 startTime;
-    uint136 endTime;
-    uint8 totalTimeBought;
-    uint8 joinPercent;
-    uint8 vipPercent;
+    bytes name;
+    /**
+       * Store properties in when sale launches
+       * saleProperties[0] is currentSupply
+       * saleProperties[1] is maxSupply
+       * saleProperties[2] is softGoal
+       * saleProperties[3] is minPerBuy
+       * saleProperties[4] is maxPerBuy
+       * saleProperties[5] is currentWei
+       * saleProperties[6] is startTime
+       * saleProperties[7] is endTime
+     */
+    uint256[8] private saleProperties;
+    /**
+       * Store properties when user contacts system
+       * saleFinances[0] is totalTimeBought
+       * saleFinances[1] is joinPercent
+       * saleFinances[2] is vipPercent
+     */
+    uint8[3] private saleFinances;
     //Current state of the sale {0: Initialized, 1: Active, 2: Canceled, 3: Finalized}.
     SaleState saleState;
     IERC20 token;
   }
 
-  /// @dev Address of the owner of the contract
+  /**
+   * @dev Address of the owner of the contract
+   */
   address private owner;
 
-  /// @dev Mapping to check if an address belongs to whitelist
+  /**
+   * @dev Mapping to check if an address belongs to whitelist
+   */
   mapping(address => bool) private whitelist;
 
-  /// @dev Mapping to check if an address is a participants
+  /**
+   * @dev Mapping to check if an address is a participants
+   */
   mapping(address => bool) private participants;
 
-  /// @dev Mapping to check the deposit of an user in a specific sale
+  /**
+   * @dev Mapping to check the deposit of an user in a specific sale
+   */
   mapping(address => mapping (uint8 => SaleDeposit)) private userDeposit;
 
-  /// @dev mapping to get sale id from sale name
-  mapping(string => uint8) private saleId;
+  /**
+   * @dev mapping to get sale id from sale name
+   */
+  mapping(bytes => uint8) private saleId;
 
-  /// @dev Array to store sales
+  /**
+   * @dev Array to store sales
+   */
   Sale[] private sales;
 
-  /// @dev The deposit amount each user needed to be whitelisted
+  /**
+   * @dev The deposit amount each user needed to be whitelisted
+   */
   uint8 private depositAmountThresh = 50;
 
-  /// @dev The deposit time each user needed to be whitelisted
+  /**
+   * @dev The deposit time each user needed to be whitelisted
+   */
   uint8 private depositTimeThresh = 3;
 
-  /// @dev decimals of the token used in sale
+  /**
+   * @dev decimals of the token used in sale
+   */
   uint256 private decimals = 18;
 
-  /// @dev Event emitted when a sale is created
+  /**
+   * @dev Event emitted when a sale is created
+   * @param sale The Sale owner create
+   */
   event CreateSale (Sale sale);
 
   /** 
@@ -69,21 +98,21 @@ contract PrivateSale is IError, ICommon{
    * @param amount The amount of wei used for the purchase
    * @param currentSupply The supply left in sale after user buy
    */ 
-  event Buy(string name, uint256 amount, uint256 currentSupply);
+  event Buy(bytes memory name, uint256 amount, uint256 currentSupply);
 
   /** 
    * @dev Event emitted when the owner claim wei from a finalized sale
    * @param name The name of a sale owner claim from
    * @param amount The amount of wei the owner got from the sale
    */ 
-  event ClaimTokenFromFinalizedSale(string name, uint256 amount);
+  event ClaimTokenFromFinalizedSale(bytes memory name, uint256 amount);
 
   /** 
    * @dev Event emitted when user reclaim wei from a canceled sale
    * @param name The name of a sale user reclaim from
    * @param amount The amount of wei the user reclaim from the sale
    */ 
-  event ReclaimWeiFromCanceledSale(string name, uint256 amount);
+  event ReclaimWeiFromCanceledSale(bytes memory name, uint256 amount);
 
   /** 
    * @dev Modifier to ensure only owner can use this function
@@ -154,7 +183,7 @@ contract PrivateSale is IError, ICommon{
     sales.push(_sale);
     saleId[_sale.name] = uint8(sales.length-1);
     Sale storage sale = sales[sales.length-1];
-    sale.currentSupply = sale.maxSupply;
+    sale.saleProperties[0] = sale.saleProperties[1];
     sale.token = IERC20(token);
 
     emit CreateSale(sale);
@@ -165,14 +194,14 @@ contract PrivateSale is IError, ICommon{
    * @param name The name of the sale being started
    * @param duration The duration of the sale
    */ 
-  function startSale(string memory name, uint256 duration) public onlyOwner {
+  function startSale(bytes memory name, uint256 duration) public onlyOwner {
     Sale storage sale = sales[saleId[name]];
-    if(sale.maxSupply == 0) revert SaleNotExist();
+    if(sale.saleProperties[1] == 0) revert SaleNotExist();
     if(sale.saleState != SaleState.INITIALIZED) revert SaleNotInitialized();
     if(duration <= 0) revert InputInvalid();
     
-    sale.startTime = uint136(block.timestamp);
-    sale.endTime = uint136(sale.startTime + duration);
+    sale.saleProperties[6] = uint136(block.timestamp);
+    sale.saleProperties[7] = uint136(sale.saleProperties[6] + duration);
     
     sale.saleState = SaleState.ACTIVE;
   }
@@ -183,15 +212,15 @@ contract PrivateSale is IError, ICommon{
    * else the sale will be canceled
    * @param name The name of the sale being ended
    */
-  function endSale(string memory name) public onlyOwner {
+  function endSale(bytes memory name) public onlyOwner {
     Sale storage sale = sales[saleId[name]];
     if(sale.saleState != SaleState.ACTIVE) revert SaleNotActive();
-    if(block.timestamp <= sale.endTime) revert SaleNotOver();
+    if(block.timestamp <= sale.saleProperties[7]) revert SaleNotOver();
 
-    if(sale.softGoal > sale.currentWei) {
+    if(sale.saleProperties[2] > sale.saleProperties[5]) {
       sale.saleState = SaleState.CANCELED;
     } 
-    if(sale.softGoal <= sale.currentWei) {
+    if(sale.saleProperties[2] <= sale.saleProperties[5]) {
       sale.saleState = SaleState.FINALIZED;
     }
   }
@@ -234,33 +263,33 @@ contract PrivateSale is IError, ICommon{
    * The user can only claim token if the sale is finalized
    * @param name The name of the sale user want to buy from
    */
-  function buy(string memory name) external payable isParticipant {
+  function buy(bytes memory name) external payable isParticipant {
     uint8 id = saleId[name];
     Sale storage sale = sales[saleId[name]];
 
     if(sale.saleState != SaleState.ACTIVE) revert SaleNotActive();
-    if(block.timestamp > sale.endTime) {
+    if(block.timestamp > sale.saleProperties[7]) {
       revert SaleIsOver();
     }
-    if(msg.value < sale.minPerBuy || msg.value > sale.maxPerBuy) {
+    if(msg.value < sale.saleProperties[3] || msg.value > sale.saleProperties[4]) {
       revert InputInvalid();
     }
-    if(sale.maxSupply - sale.currentWei * sale.vipPercent - msg.value < 0) {
+    if(sale.saleProperties[1] - sale.saleProperties[5] * sale.saleFinances[2] - msg.value < 0) {
       revert InsufficientSupplyInSale();
     }
     unchecked {
       userDeposit[msg.sender][id].deposit += msg.value;
-      sale.currentWei += msg.value;
-      sale.totalTimeBought++;
+      sale.saleProperties[5] += msg.value;
+      sale.saleFinances[0]++;
 
       if (whitelist[msg.sender]) {
-        sale.currentSupply -= userDeposit[msg.sender][id].deposit * sale.vipPercent;
+        sale.saleProperties[0] -= userDeposit[msg.sender][id].deposit * sale.saleFinances[2];
       } else {
-        sale.currentSupply -= userDeposit[msg.sender][id].deposit * sale.joinPercent;
+        sale.saleProperties[0] -= userDeposit[msg.sender][id].deposit * sale.saleFinances[1];
       }
     }
     
-    emit Buy(name, msg.value, sale.currentSupply);
+    emit Buy(name, msg.value, sale.saleProperties[0]);
   }
 
   /** 
@@ -269,7 +298,7 @@ contract PrivateSale is IError, ICommon{
    * If the sale is finalized, let user claim the amount of token according to the amount deposited and the fee percent
    * @param name The name of the sale user want to claim from
    */
-  function claim(string memory name) external isParticipant {
+  function claim(bytes memory name) external isParticipant {
     Sale memory sale = sales[saleId[name]];
     if(sale.saleState != SaleState.CANCELED && sale.saleState != SaleState.FINALIZED) {
       revert SaleNotOver();
@@ -283,9 +312,9 @@ contract PrivateSale is IError, ICommon{
     } 
     if(sale.saleState == SaleState.FINALIZED) {
       if (whitelist[msg.sender]) {
-          amount = userDeposit[msg.sender][saleId[name]].deposit * sale.vipPercent;
+          amount = userDeposit[msg.sender][saleId[name]].deposit * sale.saleFinances[2];
       } else {
-          amount = userDeposit[msg.sender][saleId[name]].deposit * sale.joinPercent;
+          amount = userDeposit[msg.sender][saleId[name]].deposit * sale.saleFinances[1];
       } 
       sale.token.safeTransferFrom(owner, msg.sender, amount);
       emit ClaimTokenFromFinalizedSale(name, amount);
@@ -296,12 +325,12 @@ contract PrivateSale is IError, ICommon{
    * @dev Let the owner withdraw the amount of wei got from a finalized sale
    * @param name The name of the sale owner want to withdraw from
    */
-  function withdraw(string memory name) public onlyOwner {
+  function withdraw(bytes memory name) public onlyOwner {
     Sale memory sale = sales[saleId[name]];
     if(sale.saleState != SaleState.FINALIZED) {
       revert SaleNotFinalized();
     }
-    payable (owner).transfer(sale.currentWei);
+    payable (owner).transfer(sale.saleProperties[5]);
   }
 
   /** 
@@ -309,9 +338,9 @@ contract PrivateSale is IError, ICommon{
    * @param name The name of the sale being checked
    * @return {uint256} The current supply of a sale
    */
-  function getCurrentSuppy(string memory name) public view returns(uint256) {
+  function getCurrentSuppy(bytes memory name) public view returns(uint256) {
       uint8 id = saleId[name];
-      return sales[id].currentSupply;
+      return sales[id].saleProperties.currentSupply;
   }
 
   /** 
@@ -319,9 +348,9 @@ contract PrivateSale is IError, ICommon{
    * @param name The name of the sale being checked
    * @return {uint256} The current wei of a sale
    */
-  function getCurrentWei(string memory name) public view returns(uint256) {
+  function getCurrentWei(bytes memory name) public view returns(uint256) {
       uint8 id = saleId[name];
-      return sales[id].currentWei;
+      return sales[id].saleProperties.currentWei;
   }
 
   /** 
@@ -329,24 +358,10 @@ contract PrivateSale is IError, ICommon{
    * @param name The name of the sale being checked
    * @return {uint256} The the total time a sale has been bought by users
    */
-  function gettotalTimeBought(string memory name) public view returns(uint256) {
+  function gettotalTimeBought(bytes memory name) public view returns(uint256) {
       uint8 id = saleId[name];
-      return sales[id].totalTimeBought;
+      return sales[id].saleFinances.totalTimeBought;
   }
-
-  // get private variable for testing, onlyOwner
-  // mapping(address => bool) private whitelist;
-
-  // mapping(address => bool) private participants;
-
-  // mapping(address => mapping (uint8 => SaleDeposit)) private userDeposit;
-
-  // mapping(string => uint8) private saleId;
-
-  // Sale[] private sales;
-
-  // uint8 private depositAmountThresh = 50;
-  // uint8 private depositTimeThresh = 3;
 
   /** 
    * @dev Check if an user is in whitelist
@@ -385,7 +400,7 @@ contract PrivateSale is IError, ICommon{
    * @param name the name of the sale being checked
    * @return {uint8} the id of the sale
    */
-  function checksaleId(string memory name) public view onlyOwner returns(uint8) {
+  function checksaleId(bytes memory name) public view onlyOwner returns(uint8) {
     return saleId[name];
   }
 
