@@ -3,11 +3,12 @@ const {
   loadFixture,
 } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
 const { ethers } = require("hardhat");
+const { setTimeout } = require("timers/promises");
 
 describe("Buy and sell func test", function () {
   let PrivateSale;
   let MyERC20Token;
-  let owner, user1, user2;
+  let owner, addr1, addr2;
   let MyERC20TokenAddress;
   let PrivateSaleAddress;
   let duration = 1000;
@@ -42,15 +43,23 @@ describe("Buy and sell func test", function () {
     };
 
   async function deployContract() {
-    [owner, user1, user2] = await ethers.getSigners();
+    [owner, addr1, addr2] = await ethers.getSigners();
     PrivateSale = await ethers.deployContract("PrivateSale");
 
     await PrivateSale.waitForDeployment();
     PrivateSaleAddress = PrivateSale.getAddress();
 
+    await PrivateSale.changeVipCondition(0, 0);
+    await PrivateSale.register(addr1.address);
+    await PrivateSale.registerVip(addr1.address);
+
     MyERC20Token = await ethers.deployContract("MyERC20Token");
     MyERC20TokenAddress = MyERC20Token.getAddress();
     await MyERC20Token.approve(PrivateSaleAddress, 50000);
+  }
+
+  async function createSale() {
+    await PrivateSale.createSale(newSale, MyERC20TokenAddress);
   }
 
   describe("check function create sale", function () {
@@ -60,7 +69,7 @@ describe("Buy and sell func test", function () {
 
     it("only owner can create sale", async function () {
       await expect(
-        PrivateSale.connect(user1).createSale(newSale, MyERC20TokenAddress)
+        PrivateSale.connect(addr1).createSale(newSale, MyERC20TokenAddress)
       ).to.be.revertedWithCustomError(PrivateSale, "NotOwner");
     });
 
@@ -85,56 +94,69 @@ describe("Buy and sell func test", function () {
   describe("buy function", function () {
     beforeEach(async function () {
       // Assuming `whitelist` is a public mapping
-      whitelist = await PrivateSale.registerVip(owner.address);
+      await loadFixture(deployContract);
+      await loadFixture(createSale);
     });
     it("Should revert if the sale is not active", async function () {
       await expect(
         PrivateSale
           .connect(addr1)
-          .buy(ethers.utils.formatBytes32String("thang_test"), {
-            value: ethers.utils.parseEther("1"),
+          .buy(ethers.encodeBytes32String("thang_test"), {
+            value: ethers.parseEther("1"),
           })
-      ).to.be.revertedWith("SaleNotActive");
+      ).to.be.revertedWithCustomError(PrivateSale, "SaleNotActive");
     });
 
     it("Should revert if sale is over", async function () {
       // Simulate the sale being over by advancing the block timestamp
       await ethers.provider.send("evm_increaseTime", [100000000]);
+      await PrivateSale.startSale(nameBytes32, 1);
+      await setTimeout(2000);
       await expect(
         PrivateSale
           .connect(addr1)
-          .buy(ethers.utils.formatBytes32String("thang_test"), {
-            value: ethers.utils.parseEther("1"),
+          .buy(ethers.encodeBytes32String("thang_test"), {
+            value: ethers.parseEther("1"),
           })
-      ).to.be.revertedWith("SaleIsOver");
+      ).to.be.revertedWithCustomError(PrivateSale, "SaleIsOver");
     });
 
     it("Should revert if input value is invalid", async function () {
+      await PrivateSale.startSale(nameBytes32, 3);
       await expect(
         PrivateSale
           .connect(addr1)
-          .buy(ethers.utils.formatBytes32String("thang_test"), {
-            value: ethers.utils.parseEther("0.5"),
+          .buy(ethers.encodeBytes32String("thang_test"), {
+            value: ethers.parseEther("0.5"),
           })
-      ).to.be.revertedWith("InputInvalid");
+      ).to.be.revertedWithCustomError(PrivateSale, "InputInvalid");
     });
 
     it("Should revert if there is insufficient supply in sale", async function () {
       // Assuming saleProperties[1] has a maximum supply
       // Set saleProperties[1] to 0 for testing purposes
-      const sale = await PrivateSale.getSale(newSale.name);
+      await PrivateSale.startSale(nameBytes32, 2);
+      const id = await PrivateSale.checksaleId(newSale.name);
+      const sale = await PrivateSale.getSale(id);
       sale.saleProperties[1] = 0;
+      await PrivateSale
+          .connect(addr1)
+          .buy(ethers.encodeBytes32String("thang_test"), {
+            value: 40000,
+          })
       await expect(
         PrivateSale
           .connect(addr1)
-          .buy(ethers.utils.formatBytes32String("thang_test"), {
-            value: ethers.utils.parseEther("1"),
+          .buy(ethers.encodeBytes32String("thang_test"), {
+            value: 30000,
           })
-      ).to.be.revertedWith("InsufficientSupplyInSale");
+      ).to.be.revertedWithCustomError(PrivateSale, "InsufficientSupplyInSale");
     });
 
     it("Should process a valid purchase", async function () {
       // Set sale to active
+      const id = await PrivateSale.checksaleId(newSale.name);
+      const sale = await PrivateSale.getSale(id);
       sale.saleState = 1; // Assuming 1 corresponds to SaleState.ACTIVE
 
       // Add user to whitelist
@@ -144,15 +166,15 @@ describe("Buy and sell func test", function () {
       await expect(() =>
         PrivateSale
           .connect(addr1)
-          .buy(ethers.utils.formatBytes32String("thang_test"), {
-            value: ethers.utils.parseEther("1"),
+          .buy(ethers.encodeBytes32String("thang_test"), {
+            value: ethers.parseEther("1"),
           })
-      ).to.changeEtherBalance(addr1, ethers.utils.parseEther("-1"));
+      ).to.changeEtherBalance(addr1, ethers.parseEther("-1"));
 
       const saleId = await PrivateSale.checksaleId(sale.name)
 
       const userDeposit = await PrivateSale.userDeposit[addr1.address][saleId];
-      expect(userDeposit).to.equal(ethers.utils.parseEther("1"));
+      expect(userDeposit).to.equal(ethers.parseEther("1"));
     });
 
     // Add more tests as needed to cover all scenarios
@@ -161,7 +183,7 @@ describe("Buy and sell func test", function () {
   describe("claim function", function () {
     beforeEach(async function () {
       // Fund the sale contract with some tokens for testing
-      await MyERC20Token.transfer(PrivateSale.address, ethers.utils.parseEther("1000"));
+      await MyERC20Token.transfer(PrivateSale.address, ethers.parseEther("1000"));
 
       // Set the sale state to CANCELLED or FINALIZED for different tests
       const sale = await PrivateSale.getSale(sale.name);
@@ -170,16 +192,16 @@ describe("Buy and sell func test", function () {
     it("Should revert if the sale is neither CANCELLED nor FINALIZED", async function () {
       sale.saleState = 1; // Assuming 1 corresponds to SaleState.ACTIVE
       await expect(
-        PrivateSale.connect(addr1).claim(ethers.utils.formatBytes32String("thang_test"))
-      ).to.be.revertedWith("SaleNotOver");
+        PrivateSale.connect(addr1).claim(ethers.encodeBytes32String("thang_test"))
+      ).to.be.revertedWithCustomError(PrivateSale, "SaleNotOver");
     });
 
     it("Should allow users to reclaim Wei from a canceled sale", async function () {
       // Simulate a deposit from addr1
       await PrivateSale
         .connect(addr1)
-        .buy(ethers.utils.formatBytes32String("thang_test"), {
-          value: ethers.utils.parseEther("1"),
+        .buy(ethers.encodeBytes32String("thang_test"), {
+          value: ethers.parseEther("1"),
         });
 
       // Set sale state to CANCELLED
@@ -187,8 +209,8 @@ describe("Buy and sell func test", function () {
 
       // Claim the refund
       await expect(() =>
-        PrivateSale.connect(addr1).claim(ethers.utils.formatBytes32String("thang_test"))
-      ).to.changeEtherBalance(addr1, ethers.utils.parseEther("1"));
+        PrivateSale.connect(addr1).claim(ethers.encodeBytes32String("thang_test"))
+      ).to.changeEtherBalance(addr1, ethers.parseEther("1"));
 
       const saleId = await sale.checksaleId(sale.name);
       const userDeposit = await PrivateSale.userDeposit[addr1.address][saleId];
@@ -199,8 +221,8 @@ describe("Buy and sell func test", function () {
       // Simulate a deposit from addr1
       await PrivateSale
         .connect(addr1)
-        .buy(ethers.utils.formatBytes32String("thang_test"), {
-          value: ethers.utils.parseEther("1"),
+        .buy(ethers.encodeBytes32String("thang_test"), {
+          value: ethers.parseEther("1"),
         });
 
       // Set sale state to FINALIZED
@@ -210,7 +232,7 @@ describe("Buy and sell func test", function () {
       PrivateSale.whitelist[addr1.address] = true;
 
       // Claim the tokens
-      await PrivateSale.connect(addr1).claim(ethers.utils.formatBytes32String("thang_test"));
+      await PrivateSale.connect(addr1).claim(ethers.encodeBytes32String("thang_test"));
 
       const tokenBalance = await MyERC20Token.balanceOf(addr1.address);
       expect(tokenBalance).to.be.gt(0); // Ensure the user received tokens

@@ -195,8 +195,10 @@ contract PrivateSale is IError, ICommon{
    * @param duration The duration of the sale
    */ 
   function startSale(bytes memory name, uint256 duration) public onlyOwner {
-    Sale storage sale = sales[saleId[name]];
-    if(sale.saleProperties[1] == 0) revert SaleNotExist();
+    uint8 id = saleId[name];
+    if (id >= sales.length) revert SaleNotExist();
+    Sale storage sale = sales[id];
+    // if(sale.saleProperties[1] == 0) revert SaleNotExist();
     if(sale.saleState != SaleState.INITIALIZED) revert SaleNotInitialized();
     if(duration <= 0) revert InputInvalid();
     
@@ -213,7 +215,9 @@ contract PrivateSale is IError, ICommon{
    * @param name The name of the sale being ended
    */
   function endSale(bytes memory name) public onlyOwner {
-    Sale storage sale = sales[saleId[name]];
+    uint8 id = saleId[name];
+    if (id >= sales.length) revert SaleNotExist();
+    Sale storage sale = sales[id];
     if(sale.saleState != SaleState.ACTIVE) revert SaleNotActive();
     if(block.timestamp <= sale.saleProperties[7]) revert SaleNotOver();
 
@@ -271,13 +275,13 @@ contract PrivateSale is IError, ICommon{
     if(block.timestamp > sale.saleProperties[7]) {
       revert SaleIsOver();
     }
-    if(msg.value < sale.saleProperties[3] || msg.value > sale.saleProperties[4]) {
-      revert InputInvalid();
-    }
-    if(sale.saleProperties[1] - sale.saleProperties[5] * sale.saleFinances[2] - msg.value < 0) {
-      revert InsufficientSupplyInSale();
-    }
     unchecked {
+      if(msg.value < sale.saleProperties[3] || msg.value > sale.saleProperties[4]) {
+        revert InputInvalid();
+      }
+      if(sale.saleProperties[1] - sale.saleProperties[5] * sale.saleFinances[2] - msg.value < 0) {
+        revert InsufficientSupplyInSale();
+      }
       userDeposit[msg.sender][id].deposit += msg.value;
       sale.saleProperties[5] += msg.value;
       sale.saleFinances[0]++;
