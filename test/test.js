@@ -8,27 +8,17 @@ const { setTimeout } = require("timers/promises");
 
 describe("Test contract", function () {
     let PrivateSale;
-    let token;
     let owner, user1, user2;
     let MyERC20TokenAddress;
     let PrivateSaleAddress;
     let duration = 1000;
 
     const newSale = {
-        name: "sh",
-        currentSupply: 0,
-        maxSupply: 50000,
-        softGoal: 20000,
-        minPerBuy: 10,
-        maxPerBuy: 40000,
-        currentWei: 0,
-        startTime: 0,
-        endTime: 0,
-        totalTimeBought: 0,
-        joinPercent: 2,
-        vipPercent: 3,
+        name: ethers.encodeBytes32String("myToken"),
+        saleProperties: [0, 50000, 20000, 10, 40000, 0, 0, 0],
+        saleFinances: [0, 2, 3],
         saleState: 0,
-        token: "0x0000000000000000000000000000000000000000",
+        token: ethers.ZeroAddress,
     };
 
     async function deployContract() {
@@ -58,18 +48,17 @@ describe("Test contract", function () {
         });
 
         it("check sale information", async function () {
-            //check data before
-            expect(PrivateSale.getSale(newSale.name) == 0);
-
             await PrivateSale.createSale(newSale, MyERC20TokenAddress);
 
             //check data after
-            const sale = PrivateSale.getSale(newSale.name);
-            expect(
-                sale.name == newSale.name && sale.token == MyERC20TokenAddress
-            );
+            const id = await PrivateSale.checksaleId(newSale.name);
+            const sale = await PrivateSale.getSale(id);
+
+            expect(sale.name).to.be.equal(newSale.name);
+            expect(sale.token).to.be.equal(MyERC20TokenAddress);
         });
 
+        // check thoong tin event
         it("check emit event", async function () {
             await expect(
                 PrivateSale.createSale(newSale, MyERC20TokenAddress)
