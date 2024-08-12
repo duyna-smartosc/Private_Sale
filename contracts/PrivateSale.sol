@@ -18,24 +18,24 @@ contract PrivateSale is IError, ICommon{
   struct Sale {
     bytes name;
     /**
-       * Store properties in when sale launches
-       * saleProperties[0] is currentSupply
-       * saleProperties[1] is maxSupply
-       * saleProperties[2] is softGoal
-       * saleProperties[3] is minPerBuy
-       * saleProperties[4] is maxPerBuy
-       * saleProperties[5] is currentWei
-       * saleProperties[6] is startTime
-       * saleProperties[7] is endTime
-     */
-    uint256[8] private saleProperties;
+      * Store properties in when sale launches
+      * saleProperties[0] is currentSupply
+      * saleProperties[1] is maxSupply
+      * saleProperties[2] is softGoal
+      * saleProperties[3] is minPerBuy
+      * saleProperties[4] is maxPerBuy
+      * saleProperties[5] is currentWei
+      * saleProperties[6] is startTime
+      * saleProperties[7] is endTime
+      */
+    uint256[8] saleProperties;
     /**
-       * Store properties when user contacts system
-       * saleFinances[0] is totalTimeBought
-       * saleFinances[1] is joinPercent
-       * saleFinances[2] is vipPercent
-     */
-    uint8[3] private saleFinances;
+      * Store properties when user contacts system
+      * saleFinances[0] is totalTimeBought
+      * saleFinances[1] is joinPercent
+      * saleFinances[2] is vipPercent
+      */
+    uint8[3] saleFinances;
     //Current state of the sale {0: Initialized, 1: Active, 2: Canceled, 3: Finalized}.
     SaleState saleState;
     IERC20 token;
@@ -98,21 +98,21 @@ contract PrivateSale is IError, ICommon{
    * @param amount The amount of wei used for the purchase
    * @param currentSupply The supply left in sale after user buy
    */ 
-  event Buy(bytes memory name, uint256 amount, uint256 currentSupply);
+  event Buy(bytes indexed name, uint256 amount, uint256 currentSupply);
 
   /** 
    * @dev Event emitted when the owner claim wei from a finalized sale
    * @param name The name of a sale owner claim from
    * @param amount The amount of wei the owner got from the sale
    */ 
-  event ClaimTokenFromFinalizedSale(bytes memory name, uint256 amount);
+  event ClaimTokenFromFinalizedSale(bytes indexed name, uint256 amount);
 
   /** 
    * @dev Event emitted when user reclaim wei from a canceled sale
    * @param name The name of a sale user reclaim from
    * @param amount The amount of wei the user reclaim from the sale
    */ 
-  event ReclaimWeiFromCanceledSale(bytes memory name, uint256 amount);
+  event ReclaimWeiFromCanceledSale(bytes indexed name, uint256 amount);
 
   /** 
    * @dev Modifier to ensure only owner can use this function
@@ -340,7 +340,7 @@ contract PrivateSale is IError, ICommon{
    */
   function getCurrentSuppy(bytes memory name) public view returns(uint256) {
       uint8 id = saleId[name];
-      return sales[id].saleProperties.currentSupply;
+      return sales[id].saleProperties[0];
   }
 
   /** 
@@ -350,7 +350,7 @@ contract PrivateSale is IError, ICommon{
    */
   function getCurrentWei(bytes memory name) public view returns(uint256) {
       uint8 id = saleId[name];
-      return sales[id].saleProperties.currentWei;
+      return sales[id].saleProperties[5];
   }
 
   /** 
@@ -360,7 +360,7 @@ contract PrivateSale is IError, ICommon{
    */
   function gettotalTimeBought(bytes memory name) public view returns(uint256) {
       uint8 id = saleId[name];
-      return sales[id].saleFinances.totalTimeBought;
+      return sales[id].saleFinances[0];
   }
 
   /** 
