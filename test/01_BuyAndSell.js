@@ -2,22 +2,6 @@ const { expect } = require("chai");
 const {
   loadFixture,
 } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
-const {
-  currentSupply,
-  maxSupply,
-  softGoal,
-  minPerBuy,
-  maxPerBuy,
-  currentWei,
-  startTime,
-  endTime,
-  vipPercent,
-  joinPercent,
-  totalTimeBought,
-  name,
-  saleState,
-  token,
-} = require("../utils/environment");
 const { ethers } = require("hardhat");
 
 describe("Buy and sell func test", function () {
@@ -28,22 +12,34 @@ describe("Buy and sell func test", function () {
   let PrivateSaleAddress;
   let duration = 1000;
 
+  // const newSale = {
+  //   name,
+  //   saleProperties: [
+  //     currentSupply,
+  //     maxSupply,
+  //     softGoal,
+  //     minPerBuy,
+  //     maxPerBuy,
+  //     currentWei,
+  //     startTime,
+  //     endTime,
+  //   ],
+  //   saleFinances: [totalTimeBought, joinPercent, vipPercent],
+  //   saleState,
+  //   token,
+  // };
+
+  const name = "thang_test";
+  const nameBytes32 = ethers.encodeBytes32String(name);
+  const saleProperties = [0, 50000, 20000, 10, 40000, 0, 0, 0];
+  const saleFinances = [0, 2, 3];
   const newSale = {
-    name,
-    saleProperties: [
-      currentSupply,
-      maxSupply,
-      softGoal,
-      minPerBuy,
-      maxPerBuy,
-      currentWei,
-      startTime,
-      endTime,
-    ],
-    saleFinances: [totalTimeBought, joinPercent, vipPercent],
-    saleState,
-    token,
-  };
+    name: nameBytes32,
+    saleProperties: saleProperties,
+    saleFinances: saleFinances,
+    saleState:0,
+    token: ethers.ZeroAddress
+    };
 
   async function deployContract() {
     [owner, user1, user2] = await ethers.getSigners();
@@ -89,7 +85,7 @@ describe("Buy and sell func test", function () {
   describe("buy function", function () {
     beforeEach(async function () {
       // Assuming `whitelist` is a public mapping
-      whitelist = await PrivateSale.whitelist(owner.address);
+      whitelist = await PrivateSale.registerVip(owner.address);
     });
     it("Should revert if the sale is not active", async function () {
       await expect(
