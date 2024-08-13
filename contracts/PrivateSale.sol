@@ -279,7 +279,7 @@ contract PrivateSale is IError, ICommon{
       if(msg.value < sale.saleProperties[3] || msg.value > sale.saleProperties[4]) {
         revert InputInvalid();
       }
-      if(sale.saleProperties[1] - sale.saleProperties[5] * sale.saleFinances[2] - msg.value < 0) {
+      if(sale.saleProperties[1] < sale.saleProperties[5] * sale.saleFinances[2] + msg.value * sale.saleFinances[2]) {
         revert InsufficientSupplyInSale();
       }
       userDeposit[msg.sender][id].deposit += msg.value;
