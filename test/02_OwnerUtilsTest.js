@@ -33,7 +33,7 @@ describe("other owner`s functions test", function () {
 
     const name = "sh";
     const nameBytes32 = ethers.encodeBytes32String(name);
-    const saleProperties = [0, 50000, 20000, 10, 40000, 0, 0, 0];
+    const saleProperties = [0, 100000, 20000, 10, 40000, 0, 0, 0];
     const saleFinances = [0, 2, 3];
     const newSale = {
     name: nameBytes32,
@@ -141,7 +141,7 @@ describe("other owner`s functions test", function () {
 
     //TC03_2
     it("owner should be able to withdraw from sale if sale is finalized", async function() {
-      const weiDeposit = 30000;
+      const weiDeposit = 20000;
       const nameBytes32 = ethers.encodeBytes32String("sh");
       await PrivateSale.startSale(nameBytes32, 2);
       await PrivateSale.register(user1.address);
