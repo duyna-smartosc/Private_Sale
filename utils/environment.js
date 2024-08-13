@@ -1,0 +1,14 @@
+export const name = process.env.NAME || "thang_test";
+export const currentSupply = Number(process.env.MAXSUPPLY) || 0 ;
+export const maxSupply = Number(process.env.MAXSUPPLY) || 50000;
+export const softGoal = Number(process.env.SOFTGOAL) || 20000;
+export const minPerBuy = Number(process.env.MINPERBUY) || 10;
+export const maxPerBuy = Number(process.env.MAXPERBUY) || 40000;
+export const currentWei = Number(process.env.CURRENTWEI) || 0;
+export const startTime = Number(process.env.STARTTIME) || 0;
+export const endTime = Number(process.env.ENDTIME) || 0;
+export const totalTimeBought = Number(process.env.TOTALTIMEBOUGHT) || 0;
+export const joinPercent = Number(process.env.JOINPERCENT) || 2;
+export const vipPercent = Number(process.env.VIPPERCENT) || 3;
+export const saleState = Number(process.env.SALESTATE) || 0;
+export const token = process.env.TOKEN || "0x0000000000000000000000000000000000000000";

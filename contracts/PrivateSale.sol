@@ -275,13 +275,13 @@ contract PrivateSale is IError, ICommon{
     if(block.timestamp > sale.saleProperties[7]) {
       revert SaleIsOver();
     }
-    if(msg.value < sale.saleProperties[3] || msg.value > sale.saleProperties[4]) {
-      revert InputInvalid();
-    }
-    if(sale.saleProperties[1] - sale.saleProperties[5] * sale.saleFinances[2] - msg.value < 0) {
-      revert InsufficientSupplyInSale();
-    }
     unchecked {
+      if(msg.value < sale.saleProperties[3] || msg.value > sale.saleProperties[4]) {
+        revert InputInvalid();
+      }
+      if(sale.saleProperties[1] < sale.saleProperties[5] * sale.saleFinances[2] + msg.value * sale.saleFinances[2]) {
+        revert InsufficientSupplyInSale();
+      }
       userDeposit[msg.sender][id].deposit += msg.value;
       sale.saleProperties[5] += msg.value;
       sale.saleFinances[0]++;
