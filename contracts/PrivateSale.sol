@@ -62,6 +62,16 @@ contract PrivateSale is IError, ICommon{
   mapping(address => mapping (uint8 => SaleDeposit)) private userDeposit;
 
   /**
+   * @dev Mapping to check the total deposit amount of an user
+   */
+  mapping(address => uint256) private userTotalDeposit;
+
+  /**
+   * @dev Mapping to check the total deposit time of an user
+   */
+  mapping(address => uint8) private userTotalTime;
+
+  /**
    * @dev mapping to get sale id from sale name
    */
   mapping(bytes => uint8) private saleId;
@@ -90,7 +100,7 @@ contract PrivateSale is IError, ICommon{
    * @dev Event emitted when a sale is created
    * @param sale The Sale owner create
    */
-  event CreateSale (Sale sale);
+  event SaleCreated (Sale sale);
 
   /** 
    * @dev Event emitted when an user buy in sale
@@ -98,21 +108,21 @@ contract PrivateSale is IError, ICommon{
    * @param amount The amount of wei used for the purchase
    * @param currentSupply The supply left in sale after user buy
    */ 
-  event Buy(bytes indexed name, uint256 amount, uint256 currentSupply);
+  event TokenBought(bytes indexed name, uint256 amount, uint256 currentSupply);
 
   /** 
    * @dev Event emitted when the owner claim wei from a finalized sale
    * @param name The name of a sale owner claim from
    * @param amount The amount of wei the owner got from the sale
    */ 
-  event ClaimTokenFromFinalizedSale(bytes indexed name, uint256 amount);
+  event TokenClaimFromFinalizedSale(bytes indexed name, uint256 amount);
 
   /** 
    * @dev Event emitted when user reclaim wei from a canceled sale
    * @param name The name of a sale user reclaim from
    * @param amount The amount of wei the user reclaim from the sale
    */ 
-  event ReclaimWeiFromCanceledSale(bytes indexed name, uint256 amount);
+  event WeiReclaimFromCanceledSale(bytes indexed name, uint256 amount);
 
   /** 
    * @dev Modifier to ensure only owner can use this function
@@ -152,7 +162,7 @@ contract PrivateSale is IError, ICommon{
    */ 
   function registerVip(address user) public onlyOwner {
     if(participants[user] != true) revert NotParticipant();
-    if(totalDeposit(user) < depositAmountThresh || totalTime(user) < depositTimeThresh) {
+    if(userTotalDeposit[user] < depositAmountThresh || userTotalTime[user] < depositTimeThresh) {
       revert VipConditionUnsastified();
     }
     if(whitelist[user] == true) {
@@ -186,7 +196,7 @@ contract PrivateSale is IError, ICommon{
     sale.saleProperties[0] = sale.saleProperties[1];
     sale.token = IERC20(token);
 
-    emit CreateSale(sale);
+    emit SaleCreated(sale);
   }
 
   /** 
@@ -230,38 +240,6 @@ contract PrivateSale is IError, ICommon{
   }
 
   /** 
-   * @dev Calculate the total deposit an user had made in all the sale the user participate in
-   * @param user The address of the user whose total deposit being checked
-   * @return {uint256} The total deposit of the user
-   */
-  function totalDeposit(address user) private view returns (uint256) {
-    uint256 total = 0;
-    unchecked {
-      for (uint8 i = 0; i < sales.length;) {
-        total += userDeposit[user][i].deposit;
-        ++i;
-      }  
-    }
-    return total;
-  }
-
-  /** 
-   * @dev Calculate the total time an user had deposit in all the sale the user participate in
-   * @param user The address of the user whose total deposit being checked
-   * @return {uint256} The total deposit time of the user
-   */
-  function totalTime(address user) private view returns (uint256) {
-    uint256 total = 0;
-    unchecked {
-      for (uint8 i = 0; i < sales.length;) {
-        if(userDeposit[user][i].deposit != 0) total++;
-        ++i;
-      }
-    }
-    return total;
-  }
-
-  /** 
    * @dev Buy token in a sale
    * The function only let user deposit the amount of wei they used to buy
    * The user can only claim token if the sale is finalized
@@ -283,17 +261,19 @@ contract PrivateSale is IError, ICommon{
         revert InsufficientSupplyInSale();
       }
       userDeposit[msg.sender][id].deposit += msg.value;
+      userTotalDeposit[msg.sender] += msg.value;
+      userTotalTime[msg.sender] += 1;
       sale.saleProperties[5] += msg.value;
       sale.saleFinances[0]++;
 
       if (whitelist[msg.sender]) {
-        sale.saleProperties[0] -= userDeposit[msg.sender][id].deposit * sale.saleFinances[2];
+        sale.saleProperties[0] -= msg.value * sale.saleFinances[2];
       } else {
-        sale.saleProperties[0] -= userDeposit[msg.sender][id].deposit * sale.saleFinances[1];
+        sale.saleProperties[0] -= msg.value * sale.saleFinances[1];
       }
     }
     
-    emit Buy(name, msg.value, sale.saleProperties[0]);
+    emit TokenBought(name, msg.value, sale.saleProperties[0]);
   }
 
   /** 
@@ -312,7 +292,7 @@ contract PrivateSale is IError, ICommon{
     if(sale.saleState == SaleState.CANCELED) {
       amount = userDeposit[msg.sender][saleId[name]].deposit;
       payable (msg.sender).transfer(amount);
-      emit ReclaimWeiFromCanceledSale(name, amount);
+      emit WeiReclaimFromCanceledSale(name, amount);
     } 
     if(sale.saleState == SaleState.FINALIZED) {
       if (whitelist[msg.sender]) {
@@ -321,7 +301,7 @@ contract PrivateSale is IError, ICommon{
           amount = userDeposit[msg.sender][saleId[name]].deposit * sale.saleFinances[1];
       } 
       sale.token.safeTransferFrom(owner, msg.sender, amount);
-      emit ClaimTokenFromFinalizedSale(name, amount);
+      emit TokenClaimFromFinalizedSale(name, amount);
     }
   }
 
@@ -396,6 +376,26 @@ contract PrivateSale is IError, ICommon{
    */
   function checkUserDeposit(address user, uint8 id) public view onlyOwner returns(SaleDeposit memory) {
     return userDeposit[user][id];
+  }
+
+  /** 
+   * @dev Check the total deposit amount of an user
+   * This function is for testing purpose only and can only be called by owner address
+   * @param user Address of the user being checked
+   * @return {uint256} the total deposit amount that user has made
+   */
+  function checkUserTotalDeposit(address user) public view onlyOwner returns(uint256) {
+    return userTotalDeposit[user];
+  }
+
+  /** 
+   * @dev Check the total deposit time of an user
+   * This function is for testing purpose only and can only be called by owner address
+   * @param user Address of the user being checked
+   * @return {uint256} the total deposit time that user has made
+   */
+  function checkUserTotalTime(address user) public view onlyOwner returns(uint8) {
+    return userTotalTime[user];
   }
 
   /** 
