@@ -2,11 +2,10 @@ const { expect } = require("chai");
 const {
     loadFixture,
 } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
-const hre = require("hardhat");
 
 const { setTimeout } = require("timers/promises");
 
-describe("Test contract", function () {
+describe("Test contract for init sale", function () {
     let PrivateSale;
     let owner, user1;
     let MyERC20TokenAddress;
@@ -33,12 +32,14 @@ describe("Test contract", function () {
         await MyERC20Token.approve(PrivateSaleAddress, 50000);
     }
 
-    describe("check function create sale", function () {
+    //TC01
+    describe("Check functions create sale", function () {
         before(async function () {
             await loadFixture(deployContract);
         });
 
-        it("only owner can create sale", async function () {
+        //TC01_1
+        it("Only owner can create sale", async function () {
             await expect(
                 PrivateSale.connect(user1).createSale(
                     newSale,
@@ -47,7 +48,8 @@ describe("Test contract", function () {
             ).to.be.revertedWithCustomError(PrivateSale, "NotOwner");
         });
 
-        it("check sale information", async function () {
+        //TC01_2
+        it("Create sale successfully", async function () {
             await PrivateSale.createSale(newSale, MyERC20TokenAddress);
 
             //check data after
@@ -58,52 +60,69 @@ describe("Test contract", function () {
             expect(sale.token).to.be.equal(MyERC20TokenAddress);
         });
 
-        xit("check emit event", async function () {
-            // const event = await PrivateSale.createSale(
-            //     newSale,
-            //     MyERC20TokenAddress
-            // );
-            // console.log(event);
-            // assert.equal()
-
-            // const newSale = {
-            //     name: ethers.encodeBytes32String("myToken"),
-            //     saleProperties: [0, 50000, 20000, 10, 40000, 0, 0, 0],
-            //     saleFinances: [0, 2, 3],
-            //     saleState: 0,
-            //     token: ethers.ZeroAddress,
-            // };
+        //TC01_3
+        it("Check emit event after create sale successfully", async function () {
+            const newSale = {
+                name: ethers.encodeBytes32String("myToken"),
+                saleProperties: [0, 50000, 20000, 10, 40000, 0, 0, 0],
+                saleFinances: [0, 2, 3],
+                saleState: 0,
+                token: ethers.ZeroAddress,
+            };
 
             await expect(PrivateSale.createSale(newSale, MyERC20TokenAddress))
-                .to.emit(PrivateSale, "CreateSale")
-                .withArgs(
-                    ethers.encodeBytes32String("myToken"),
-                    [0, 50000, 20000, 10, 40000, 0, 0, 0],
-                    [0, 2, 3],
-                    0,
-                    ethers.ZeroAddress
-                );
+                .to.emit(PrivateSale, "SaleCreated")
+                .withArgs((sale) => {
+                    expect(sale.name).to.equal(
+                        ethers.encodeBytes32String("myToken")
+                    );
+                    expect(sale.saleProperties).to.deep.equal([
+                        BigInt(50000),
+                        BigInt(50000),
+                        BigInt(20000),
+                        BigInt(10),
+                        BigInt(40000),
+                        BigInt(0),
+                        BigInt(0),
+                        BigInt(0),
+                    ]);
+
+                    expect(sale.saleFinances).to.deep.equal([
+                        BigInt(0),
+                        BigInt(2),
+                        BigInt(3),
+                    ]);
+                    expect(sale.saleState).to.equal(0);
+                    expect(sale.token).to.equal(
+                        "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+                    );
+                    return true;
+                });
         });
     });
 
-    describe("check function start sale", async function () {
+    //TC02
+    describe("Check function start sale", async function () {
         before(async function () {
             await loadFixture(deployContract);
         });
 
-        it("only owner can start sale", async function () {
+        //TC02_1
+        it("Only owner can start sale", async function () {
             await expect(
                 PrivateSale.connect(user1).startSale(newSale.name, duration)
             ).to.be.revertedWithCustomError(PrivateSale, "NotOwner");
         });
 
-        it("sale is not create", async function () {
+        //TC02_2
+        it("Should revert if create sale when sale is not create", async function () {
             await expect(
                 PrivateSale.startSale(newSale.name, duration)
             ).to.be.revertedWithCustomError(PrivateSale, "SaleNotExist");
         });
 
-        it("duration invalid", async function () {
+        //TC02_3
+        it("Should revert if input duration invalid", async function () {
             await PrivateSale.createSale(newSale, MyERC20TokenAddress);
 
             await expect(
@@ -111,7 +130,8 @@ describe("Test contract", function () {
             ).to.be.revertedWithCustomError(PrivateSale, "InputInvalid");
         });
 
-        it("check time", async function () {
+        //TC02_4
+        it("Check time of sale when start sale successfully", async function () {
             await PrivateSale.createSale(newSale, MyERC20TokenAddress);
             const id = await PrivateSale.checksaleId(newSale.name);
             const sale = await PrivateSale.getSale(id);
@@ -130,7 +150,8 @@ describe("Test contract", function () {
             );
         });
 
-        it("check status", async function () {
+        //TC02_5
+        it("Check status of sale when start sale successfully ", async function () {
             await PrivateSale.createSale(newSale, MyERC20TokenAddress);
             const id = await PrivateSale.checksaleId(newSale.name);
             const sale = await PrivateSale.getSale(id);
@@ -147,12 +168,14 @@ describe("Test contract", function () {
         });
     });
 
-    describe("check function end sale", async function () {
+    //TC03
+    describe("Check function end sale", async function () {
         before(async function () {
             await loadFixture(deployContract);
         });
 
-        it("only owner can end sale", async function () {
+        //TC03_1
+        it("Only owner can end sale", async function () {
             await PrivateSale.createSale(newSale, MyERC20TokenAddress);
 
             await expect(
@@ -160,13 +183,15 @@ describe("Test contract", function () {
             ).to.be.revertedWithCustomError(PrivateSale, "NotOwner");
         });
 
-        it("sale is not active", async function () {
+        //TC03_2
+        it("Should revert when end sale if sale is not start", async function () {
             await expect(
                 PrivateSale.endSale(newSale.name)
             ).to.be.revertedWithCustomError(PrivateSale, "SaleNotActive");
         });
 
-        it("check sale is not over", async function () {
+        //TC03_3
+        it("Should revert when end sale when sale is not over", async function () {
             await PrivateSale.createSale(newSale, MyERC20TokenAddress);
             await PrivateSale.startSale(newSale.name, duration);
 
@@ -175,7 +200,8 @@ describe("Test contract", function () {
             ).to.be.revertedWithCustomError(PrivateSale, "SaleNotOver");
         });
 
-        it("check sale cancel", async function () {
+        //TC03_4
+        it("Check status of sale when sale cancel", async function () {
             await PrivateSale.createSale(newSale, MyERC20TokenAddress);
             await PrivateSale.startSale(newSale.name, 1);
 
