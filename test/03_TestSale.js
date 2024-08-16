@@ -1,9 +1,8 @@
 const { expect } = require("chai");
 const {
     loadFixture,
+    time,
 } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
-
-const { setTimeout } = require("timers/promises");
 
 describe("Test contract for init sale", function () {
     let PrivateSale;
@@ -205,7 +204,7 @@ describe("Test contract for init sale", function () {
             await PrivateSale.createSale(newSale, MyERC20TokenAddress);
             await PrivateSale.startSale(newSale.name, 1);
 
-            await setTimeout(2000);
+            await time.increase(2000);
 
             await PrivateSale.endSale(newSale.name);
             let sl = await PrivateSale.getSale(
