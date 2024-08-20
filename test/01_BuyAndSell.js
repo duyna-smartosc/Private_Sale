@@ -87,7 +87,7 @@ describe("Buy and sell func test", function () {
     it("check emit event", async function () {
       await expect(
         PrivateSale.createSale(newSale, MyERC20TokenAddress)
-      ).to.emit(PrivateSale, "CreateSale");
+      ).to.emit(PrivateSale, "SaleCreated");
     });
   });
 
